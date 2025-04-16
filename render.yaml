@@ -1,10 +1,7 @@
 services:
   - type: web
-    name: matchview-backend
-    env: python
+    name: test-service
+    env: static
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"
-    envVars:
-      - key: PORT
-        value: 10000
+    buildCommand: ""
+    startCommand: ""
