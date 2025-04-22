@@ -4,17 +4,19 @@ import random
 import string
 import json
 import os
+import requests
 
 app = FastAPI()
 
-# CORS setup (this is important so your frontend on GitHub Pages can access the backend)
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Adjust to your frontend domain for production
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Home endpoint
 @app.get("/")
 def home():
     return {"message": "Welcome to Matchview backend!"}
@@ -48,3 +50,53 @@ def login_code(code: str):
 
     # If code exists, confirm login
     return {"message": f"Code {code} logged in successfully"}
+
+# New: Fixtures and odds endpoint (with 1xBet odds, multiplied by 2)
+@app.get("/fixtures")
+def get_fixtures():
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures?league=39&season=2025"  # adjust league if needed
+    odds_url_template = "https://api-football-v1.p.rapidapi.com/v3/odds?fixture={}"
+
+    headers = {
+        "X-RapidAPI-Key": "85a7bcac59msh6ae91a3600dcc27p198072jsn4abf45d50cff",  # Replace with your actual API key
+        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers)
+    fixtures = response.json()["response"]
+
+    final_data = []
+
+    for fixture in fixtures:
+        fixture_id = fixture["fixture"]["id"]
+        home_team = fixture["teams"]["home"]["name"]
+        away_team = fixture["teams"]["away"]["name"]
+
+        odds_response = requests.get(odds_url_template.format(fixture_id), headers=headers)
+        odds_data = odds_response.json()["response"]
+
+        points = {"home": None, "draw": None, "away": None}
+
+        for item in odds_data:
+            for bookmaker in item.get("bookmakers", []):
+                if bookmaker["name"] == "1xBet":
+                    for bet in bookmaker["bets"]:
+                        if bet["name"] == "Match Winner":
+                            for val in bet["values"]:
+                                if val["value"] == "Home":
+                                    points["home"] = round(float(val["odd"]) * 2, 2)
+                                elif val["value"] == "Draw":
+                                    points["draw"] = round(float(val["odd"]) * 2, 2)
+                                elif val["value"] == "Away":
+                                    points["away"] = round(float(val["odd"]) * 2, 2)
+                    break  # Stop after 1xBet
+            break  # Stop after first item
+
+        final_data.append({
+            "fixture_id": fixture_id,
+            "home": home_team,
+            "away": away_team,
+            "points": points
+        })
+
+    return final_data
